@@ -86,23 +86,23 @@ static void touchn(long length, T* data) {
 	}
 }
 
-// Integrate the python scripts for Agilent multimeter sampling and power estimation
-float getPowerDissipation(float kernelTime){
 
-	PyObject *pName, *pModule, *pDict, *pFunc, *pValue, *pArgs;
-	pArgs = PyTuple_New(1);
-	pValue = PyFloat_FromDouble(kernelTime);
-	PyTuple_SetItem(pArgs, 0, pValue);  
-	double E = 0.0;
-	int rets = 0;
-	//rets = stopMeasure();
+// Pull the python functions out
+float getFLoatFromPythonCall(float kernelTime, char * method, char * file_prefix, char * path){
 
+    PyObject *pName, *pModule, *pDict, *pFunc, *pValue, *pArgs;
+    pArgs = PyTuple_New(1);
+    pValue = PyFloat_FromDouble(kernelTime);
+    PyTuple_SetItem(pArgs, 0, pValue);  
+    double E = 0.0;
+    int rets = 0;
+    //rets = stopMeasure();
     // Initialize the Python Interpreter
     Py_Initialize();
     PyRun_SimpleString("import sys");
-    PyRun_SimpleString("sys.path.append(\"./Energy")");
+    PyRun_SimpleString("sys.path.append(\".\")");
     // Build the name object
-    pName = PyString_FromString("probe");
+    pName = PyString_FromString(file_prefix);
 
     // Load the module object
     pModule = PyImport_Import(pName);
@@ -111,11 +111,13 @@ float getPowerDissipation(float kernelTime){
     pDict = PyModule_GetDict(pModule);
 
     // pFunc is also a borrowed reference 
-    pFunc = PyDict_GetItemString(pDict, "meanPowerExtern");
+    pFunc = PyDict_GetItemString(pDict, method);
 
     if (PyCallable_Check(pFunc)) 
     {
         PyFloatObject *res = PyObject_CallObject(pFunc, pArgs);
+
+	// As double
         E = PyFloat_AsDouble(res);
     } else 
     {
@@ -128,170 +130,63 @@ float getPowerDissipation(float kernelTime){
 
     // Finish the Python Interpreter
     Py_Finalize();
-    return (float)E;
+    return (double)E;
 }
-// Integrate the python scripts for Agilent multimeter sampling and power estimation
+
+int measure(char * method, char * file_prefix, char * path){
+
+    PyObject *pName, *pModule, *pDict, *pFunc, *pValue;
+    double power = 0.0;
+    int ret = 0;
+    // Initialize the Python Interpreter
+    Py_Initialize();
+    PyRun_SimpleString("import sys");
+    PyRun_SimpleString("sys.path.append(\".\")");
+    // Build the name object
+    pName = PyString_FromString(file_prefix);
+
+    // Load the module object
+    pModule = PyImport_Import(pName);
+
+    // pDict is a borrowed reference 
+    pDict = PyModule_GetDict(pModule);
+
+    // pFunc is also a borrowed reference 
+    pFunc = PyDict_GetItemString(pDict, method);
+
+    if (PyCallable_Check(pFunc)) 
+    {
+        PyObject_CallObject(pFunc, NULL);
+    } else 
+    {
+        ret = 1;
+        PyErr_Print();
+    }
+
+    // Clean up
+    Py_DECREF(pModule);
+    Py_DECREF(pName);
+
+    // Finish the Python Interpreter
+    Py_Finalize();
+    return ret;
+}
+
+float getPowerDissipation(float kernelTime) {
+	return	getFLoatFromPythonCall(kernelTime, "meanPowerExtern", "probe", "./");
+}
+
 float getEnergyConsumed(float kernelTime){
-	PyObject *pName, *pModule, *pDict, *pFunc, *pValue, *pArgs;
-	pArgs = PyTuple_New(1);
-	pValue = PyFloat_FromDouble(kernelTime);
-	PyTuple_SetItem(pArgs, 0, pValue);  
-	double E = 0.0;
-	int rets = 0;
-	//rets = stopMeasure();
-    // Initialize the Python Interpreter
-    Py_Initialize();
-    PyRun_SimpleString("import sys");
-    PyRun_SimpleString("sys.path.append(\"./Energy")");
-    // Build the name object
-    pName = PyString_FromString("probe");
-
-    // Load the module object
-    pModule = PyImport_Import(pName);
-
-    // pDict is a borrowed reference 
-    pDict = PyModule_GetDict(pModule);
-
-    // pFunc is also a borrowed reference 
-    pFunc = PyDict_GetItemString(pDict, "energyExtern");
-
-    if (PyCallable_Check(pFunc)) 
-    {
-        PyFloatObject *res = PyObject_CallObject(pFunc, pArgs);
-        E = PyFloat_AsDouble(res);
-    } else 
-    {
-        PyErr_Print();
-    }
-
-    // Clean up
-    Py_DECREF(pModule);
-    Py_DECREF(pName);
-
-    // Finish the Python Interpreter
-    Py_Finalize();
-    return (float)E;
+	return	getFLoatFromPythonCall(kernelTime, "energyExtern", "probe", "./");
 }
-// Intergrate Python script for init and request for whole board Telnet Agilent sampling
-int startMeasure(){
-
-	PyObject *pName, *pModule, *pDict, *pFunc, *pValue;
-	double power = 0.0;
-	int ret = 0;
-    // Initialize the Python Interpreter
-    Py_Initialize();
-    PyRun_SimpleString("import sys");
-    PyRun_SimpleString("sys.path.append(\"./Energy")");
-    // Build the name object
-    pName = PyString_FromString("startImmediate");
-
-    // Load the module object
-    pModule = PyImport_Import(pName);
-
-    // pDict is a borrowed reference 
-    pDict = PyModule_GetDict(pModule);
-
-    // pFunc is also a borrowed reference 
-    pFunc = PyDict_GetItemString(pDict, "init");
-
-    if (PyCallable_Check(pFunc)) 
-    {
-        PyObject_CallObject(pFunc, NULL);
-    } else 
-    {
-    	ret = 1;
-        PyErr_Print();
-    }
-
-    // Clean up
-    Py_DECREF(pModule);
-    Py_DECREF(pName);
-
-    // Finish the Python Interpreter
-    Py_Finalize();
-    return ret;
-}
-
-// Stop immediate and compensate for time related errors 
-int stopMeasure(){
-
-	PyObject *pName, *pModule, *pDict, *pFunc, *pValue;
-	int ret = 0;
-	double power = 0.0;
-    // Initialize the Python Interpreter
-    Py_Initialize();
-    PyRun_SimpleString("import sys");
-    PyRun_SimpleString("sys.path.append(\"./Energy")");
-    // Build the name object
-    pName = PyString_FromString("stopImmediate");
-
-    // Load the module object
-    pModule = PyImport_Import(pName);
-
-    // pDict is a borrowed reference 
-    pDict = PyModule_GetDict(pModule);
-
-    // pFunc is also a borrowed reference 
-    pFunc = PyDict_GetItemString(pDict, "stop");
-
-    if (PyCallable_Check(pFunc)) 
-    {
-        PyObject_CallObject(pFunc, NULL);
-    } else 
-    {
-    	ret = 1;
-        PyErr_Print();
-    }
-
-    // Clean up
-    Py_DECREF(pModule);
-    Py_DECREF(pName);
-
-    // Finish the Python Interpreter
-    Py_Finalize();
-    return ret;
-}
-
 float getSampleTime(float offset){
-	PyObject *pName, *pModule, *pDict, *pFunc, *pValue, *pArgs;
-	pArgs = PyTuple_New(1);
-	pValue = PyFloat_FromDouble(offset);
-	PyTuple_SetItem(pArgs, 0, pValue);  
-	double timeRet = 0.0;
-	int rets = 0;
-	//rets = stopMeasure();
-    // Initialize the Python Interpreter
-    Py_Initialize();
-    PyRun_SimpleString("import sys");
-    PyRun_SimpleString("sys.path.append(\"./Energy")");
-    // Build the name object
-    pName = PyString_FromString("probe");
-
-    // Load the module object
-    pModule = PyImport_Import(pName);
-
-    // pDict is a borrowed reference 
-    pDict = PyModule_GetDict(pModule);
-
-    // pFunc is also a borrowed reference 
-    pFunc = PyDict_GetItemString(pDict, "timeDurationCutoffExtern");
-
-    if (PyCallable_Check(pFunc)) 
-    {
-        PyFloatObject *res = PyObject_CallObject(pFunc, pArgs);
-        timeRet = PyFloat_AsDouble(res);
-    } else 
-    {
-        PyErr_Print();
-    }
-
-    // Clean up
-    Py_DECREF(pModule);
-    Py_DECREF(pName);
-
-    // Finish the Python Interpreter
-    Py_Finalize();
-    return (float)timeRet;
+	return	getFLoatFromPythonCall(kernelTime, "timeDurationCutoffExtern", "probe", "./");
+}
+int startMeasure() {
+	return measure("start", "startImmediate", "./");
+}
+int stopMeasure(){
+	return measure("stop", "stopImmediate", "./");
 }
 
 int main(int argc, char **argv) {
